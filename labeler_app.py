@@ -351,7 +351,6 @@ folium.TileLayer(
     overlay=True, show=True,
     maxNativeZoom=14, maxZoom=22, opacity=0.65,
 ).add_to(big_map)
-folium.LayerControl(collapsed=False, position="topright").add_to(big_map)
 
 if sample_polygon:
     folium.GeoJson(sample_polygon, style_function=lambda x: {
@@ -378,6 +377,9 @@ for s in samples_recent:
         style_function=lambda x, c=c: {
             "fillOpacity":0.0, "color":c, "weight":2,
             "dashArray":"3,3"}).add_to(big_map)
+
+# LayerControl must be added AFTER all overlays
+folium.LayerControl(collapsed=True, position="topright").add_to(big_map)
 
 big_click = st_folium(big_map, height=560, width=None,
                         returned_objects=["last_clicked"],
