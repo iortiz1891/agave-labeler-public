@@ -145,26 +145,41 @@ def insert_labels(records):
 
 
 # ─────────────────────────────────────────────────────────────────────
-# Wayback releases (cached download from GitHub or fall back to recent)
+# Wayback releases — load from bundled local file first, then GitHub, then fallback
 # ─────────────────────────────────────────────────────────────────────
 @st.cache_data
 def load_wayback():
+    # 1. Bundled in repo (most reliable — these IDs are validated)
+    here = os.path.dirname(os.path.abspath(__file__))
+    local = os.path.join(here, "esri_wayback_releases.json")
+    if os.path.exists(local):
+        try:
+            with open(local) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    # 2. Remote (in case the bundled file isn't present)
     try:
         import urllib.request
         with urllib.request.urlopen(WAYBACK_RELEASES_URL, timeout=10) as r:
             return json.loads(r.read())
     except Exception:
-        # Built-in fallback: a few recent release IDs
-        return {
-            "2018": {"release_id": "9352", "date": "2018-04-01"},
-            "2019": {"release_id": "21564", "date": "2019-04-01"},
-            "2020": {"release_id": "35023", "date": "2020-04-01"},
-            "2021": {"release_id": "47643", "date": "2021-04-01"},
-            "2022": {"release_id": "60195", "date": "2022-04-01"},
-            "2023": {"release_id": "65343", "date": "2023-05-01"},
-            "2024": {"release_id": "82094", "date": "2024-05-01"},
-            "2025": {"release_id": "92994", "date": "2025-05-01"},
-        }
+        pass
+    # 3. Last-resort: validated IDs (verified 2026-05-08 by HTTP 200)
+    return {
+        "2014": {"release_id": "4230",  "date": "2014-03-26"},
+        "2015": {"release_id": "15084", "date": "2015-03-18"},
+        "2016": {"release_id": "19085", "date": "2016-03-16"},
+        "2017": {"release_id": "29387", "date": "2017-03-15"},
+        "2018": {"release_id": "8255",  "date": "2018-03-14"},
+        "2019": {"release_id": "4383",  "date": "2019-03-13"},
+        "2020": {"release_id": "16062", "date": "2020-03-23"},
+        "2021": {"release_id": "5359",  "date": "2021-03-17"},
+        "2022": {"release_id": "10321", "date": "2022-03-16"},
+        "2023": {"release_id": "44873", "date": "2023-03-15"},
+        "2024": {"release_id": "60013", "date": "2024-03-07"},
+        "2025": {"release_id": "6543",  "date": "2025-03-27"},
+    }
 
 
 wayback_rel = load_wayback()
