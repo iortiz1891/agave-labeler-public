@@ -339,6 +339,20 @@ big_map = folium.Map(location=[cur_lat, cur_lon],
                        control_scale=True, max_zoom=22, zoom_control=True)
 add_basemap(big_map, selected_basemap, year=2025)
 
+# v29 model prob overlay (tiles bundled in this same repo, raw CDN)
+V29_TILE_URL = (
+    "https://raw.githubusercontent.com/iortiz1891/agave-labeler-public/"
+    "main/tiles/agave_prob_v29/{z}/{x}/{y}.png"
+)
+folium.TileLayer(
+    V29_TILE_URL,
+    attr="v29 prob (model)",
+    name="🎯 v29 prob Agave",
+    overlay=True, show=True,
+    maxNativeZoom=14, maxZoom=22, opacity=0.65,
+).add_to(big_map)
+folium.LayerControl(collapsed=False, position="topright").add_to(big_map)
+
 if sample_polygon:
     folium.GeoJson(sample_polygon, style_function=lambda x: {
         "fillOpacity":0.10, "fillColor":"#FFD700",
