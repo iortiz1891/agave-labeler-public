@@ -1,0 +1,9 @@
+streamlit>=1.30
+streamlit-folium>=0.21
+folium>=0.17
+pyproj>=3.6
+shapely>=2.0
+numpy>=1.26
+pandas>=2.0
+supabase>=2.4
+python-dotenv>=1.0
