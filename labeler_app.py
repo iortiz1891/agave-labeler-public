@@ -515,21 +515,27 @@ for row_years in [ALL_YEARS[:5], ALL_YEARS[5:]]:
 # Save & info
 # ─────────────────────────────────────────────────────────────────────
 st.markdown("---")
-if marker_lat is None:
-    st.info("👆 Click en el mapa grande arriba para colocar un cuadrado de muestra.")
-else:
-    cinfo, cact = st.columns([1, 2])
-    with cinfo:
-        n_yes_now = sum(1 for v in radio_choices.values() if v == "yes")
-        n_no_now  = sum(1 for v in radio_choices.values() if v == "no")
-        n_unsure  = sum(1 for v in radio_choices.values() if v == "unsure")
+no_marker = (marker_lat is None)
+if no_marker:
+    st.warning("👆 Click en el mapa grande arriba para colocar el cuadrado de muestra. El botón Save aparece deshabilitado hasta entonces.")
+
+cinfo, cact = st.columns([1, 2])
+with cinfo:
+    n_yes_now = sum(1 for v in radio_choices.values() if v == "yes")
+    n_no_now  = sum(1 for v in radio_choices.values() if v == "no")
+    n_unsure  = sum(1 for v in radio_choices.values() if v == "unsure")
+    if no_marker:
+        st.code(f"lat: (sin marker)\nlon: (sin marker)\n"
+                  f"sample: 90 × 90 m\n"
+                  f"radios: {n_yes_now} yes / {n_no_now} no / {n_unsure} unsure")
+    else:
         st.code(f"lat: {marker_lat:.6f}\nlon: {marker_lon:.6f}\n"
                   f"sample: 90 × 90 m\n"
                   f"radios: {n_yes_now} yes / {n_no_now} no / {n_unsure} unsure")
-    with cact:
-        st.markdown("**Save all 10 years (1 click → 10 records → auto-clear marker):**")
+with cact:
+    st.markdown("**Save all 10 years (1 click → 10 records → auto-clear marker):**")
 
-        def save_all():
+    def save_all():
             base_id = f"INT_{int(datetime.now().timestamp())}_{uuid.uuid4().hex[:6]}"
             labeller = st.session_state.get("labeller_name", "anonymous")
             records = []
@@ -556,17 +562,20 @@ else:
                 fetch_recent_samples.clear()
                 st.rerun()
 
-        bb = st.columns(2)
-        with bb[0]:
-            if st.button(f"💾 Save All {len(ALL_YEARS)} years & Next ▶",
-                          width="stretch", type="primary"):
-                save_all()
-        with bb[1]:
-            if st.button("↩️ Cancel (clear marker)", width="stretch"):
-                st.session_state["int_marker_lat"] = None
-                st.session_state["int_marker_lon"] = None
-                st.session_state["int_round"] = ROUND + 1
-                st.rerun()
+    bb = st.columns(2)
+    with bb[0]:
+        if st.button(f"💾 Save All {len(ALL_YEARS)} years & Next ▶",
+                      width="stretch", type="primary",
+                      disabled=no_marker,
+                      help="Coloca un marker primero" if no_marker else None):
+            save_all()
+    with bb[1]:
+        if st.button("↩️ Cancel (clear marker)", width="stretch",
+                      disabled=no_marker):
+            st.session_state["int_marker_lat"] = None
+            st.session_state["int_marker_lon"] = None
+            st.session_state["int_round"] = ROUND + 1
+            st.rerun()
 
 
 # ─────────────────────────────────────────────────────────────────────
