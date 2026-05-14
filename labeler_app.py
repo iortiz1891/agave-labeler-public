@@ -458,9 +458,9 @@ def render_mini_html(year, lat, lon, zoom, marker_lat, marker_lon,
             folium.GeoJson(
                 {"type": "Feature", "geometry": poly, "properties": {}},
                 style_function=lambda x, c=sq_color: {
-                    "fillOpacity": 0.15,
+                    "fillOpacity": 0.0,  # sin relleno — sólo contorno
                     "fillColor": c,
-                    "color": c, "weight": 3.5,
+                    "color": c, "weight": 4,
                 }
             ).add_to(m)
         except: pass
