@@ -471,6 +471,23 @@ mini_lat = marker_lat if marker_lat is not None else cur_lat
 mini_lon = marker_lon if marker_lon is not None else cur_lon
 mini_zoom = max(big_zoom, 17)
 
+# Bulk-set all radios buttons (Yes all / No all)
+bulk_cols = st.columns([1, 1, 4])
+with bulk_cols[0]:
+    if st.button("✅ Yes all", width="stretch",
+                  help="Marca los 10 años como yes"):
+        for y in ALL_YEARS:
+            st.session_state[f"int_radio_{y}_r{ROUND}"] = "yes"
+        st.rerun()
+with bulk_cols[1]:
+    if st.button("❌ No all", width="stretch",
+                  help="Marca los 10 años como no (default)"):
+        for y in ALL_YEARS:
+            st.session_state[f"int_radio_{y}_r{ROUND}"] = "no"
+        st.rerun()
+with bulk_cols[2]:
+    st.caption("ℹ️ Bulk-set: ahorra clicks cuando la parcela es claramente la misma clase en TODOS los años.")
+
 radio_choices = {}
 poly_str = json.dumps(sample_polygon_geojson) if sample_polygon_geojson else ""
 for row_years in [ALL_YEARS[:5], ALL_YEARS[5:]]:
