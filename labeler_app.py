@@ -420,7 +420,7 @@ if big_click and big_click.get("last_clicked"):
 # ─────────────────────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False, max_entries=200)
 def render_mini_html(year, lat, lon, zoom, marker_lat, marker_lon,
-                      poly_str, height=200):
+                      poly_str, height=200, label="no"):
     m = folium.Map(location=[lat, lon], zoom_start=zoom, tiles=None,
                     control_scale=False, max_zoom=22, zoom_control=False,
                     width=320, height=height)
@@ -452,11 +452,16 @@ def render_mini_html(year, lat, lon, zoom, marker_lat, marker_lon,
     if poly_str:
         try:
             poly = json.loads(poly_str)
+            # Color cuadrado según etiqueta: yes=verde, no=rojo, unsure=naranja,
+            # not_visible=gris. Default amarillo si no hay label.
+            sq_color = COLOR_MAP.get(label, "#FFD700")
             folium.GeoJson(
                 {"type": "Feature", "geometry": poly, "properties": {}},
-                style_function=lambda x: {"fillOpacity":0.10,
-                                           "fillColor":"#FFD700",
-                                           "color":"#FFD700","weight":3}
+                style_function=lambda x, c=sq_color: {
+                    "fillOpacity": 0.15,
+                    "fillColor": c,
+                    "color": c, "weight": 3.5,
+                }
             ).add_to(m)
         except: pass
     folium.LayerControl(collapsed=True, position="topright").add_to(m)
@@ -495,14 +500,19 @@ for row_years in [ALL_YEARS[:5], ALL_YEARS[5:]]:
     for ci, y in enumerate(row_years):
         with cols_grid[ci]:
             is_2025 = (y == 2025)
-            st.markdown(f"**{y}** {'⭐' if is_2025 else ''}")
+            radio_key = f"int_radio_{y}_r{ROUND}"
+            # Read CURRENT label from session_state BEFORE rendering mini-map
+            # so the polygon color reflects the current selection.
+            current_label = st.session_state.get(radio_key, "no")
+            st.markdown(f"**{y}** {'⭐' if is_2025 else ''} "
+                          f"{LABEL_LBLS.get(current_label, '')}")
             html = render_mini_html(year=y, lat=mini_lat, lon=mini_lon,
                                       zoom=mini_zoom,
                                       marker_lat=marker_lat,
                                       marker_lon=marker_lon,
-                                      poly_str=poly_str, height=190)
+                                      poly_str=poly_str, height=190,
+                                      label=current_label)
             st_components.html(html, height=200, scrolling=False)
-            radio_key = f"int_radio_{y}_r{ROUND}"
             chosen = st.radio(
                 f"label_{y}", options=LABEL_OPTS,
                 format_func=lambda x: LABEL_LBLS[x],
