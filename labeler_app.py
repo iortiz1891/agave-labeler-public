@@ -256,6 +256,11 @@ with ctrl1:
 with ctrl2:
     BASEMAP_KEYS = ["Esri Wayback 2025", "Esri current",
                      "Google Satellite", "Google Hybrid",
+                     "Planet 2025-05", "Planet 2024-05",
+                     "Planet 2023-05", "Planet 2022-05",
+                     "Planet 2021-05", "Planet 2020-05",
+                     "Planet 2019-05", "Planet 2018-05",
+                     "Planet 2017-05",
                      "CartoDB Dark", "OpenStreetMap"]
     selected_basemap = st.selectbox("Base layer:", options=BASEMAP_KEYS,
                                        index=0)
@@ -300,6 +305,9 @@ for i, (lbl, kw, key) in enumerate([
 # ─────────────────────────────────────────────────────────────────────
 # Big map (2025 reference)
 # ─────────────────────────────────────────────────────────────────────
+# Planet NICFI / commercial monthly basemaps (API key tied to project)
+PLANET_API_KEY = "PLAKab452efbf9b14cf2b10670ea24b3e0ef"
+
 def add_basemap(m, key, year=None):
     rel = wayback_rel.get(str(year))
     if key == "Esri Wayback 2025" and rel:
@@ -307,6 +315,14 @@ def add_basemap(m, key, year=None):
             f"https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{rel['release_id']}/{{z}}/{{y}}/{{x}}",
             attr=f"Wayback {rel['date']}",
             maxNativeZoom=17, maxZoom=22).add_to(m)
+    elif key.startswith("Planet "):
+        # key format "Planet YYYY-MM" → global_monthly_YYYY_MM_mosaic, 5m
+        ym = key.replace("Planet ", "").replace("-", "_")  # 2025-05 → 2025_05
+        mosaic = f"global_monthly_{ym}_mosaic"
+        folium.TileLayer(
+            f"https://tiles.planet.com/basemaps/v1/planet-tiles/{mosaic}/gmap/{{z}}/{{x}}/{{y}}.png?api_key={PLANET_API_KEY}",
+            attr=f"Planet {ym.replace('_','-')} (5m)",
+            maxNativeZoom=18, maxZoom=22).add_to(m)
     elif key == "Esri current":
         folium.TileLayer(
             "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
@@ -413,12 +429,26 @@ def render_mini_html(year, lat, lon, zoom, marker_lat, marker_lon,
         folium.TileLayer(
             f"https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{rel['release_id']}/{{z}}/{{y}}/{{x}}",
             attr=f"WB {rel['date']}",
+            name=f"Esri Wayback {year}",
             maxNativeZoom=17, maxZoom=22).add_to(m)
     else:
         folium.TileLayer(
             "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
             attr="Esri current",
+            name=f"Esri current {year}",
             maxNativeZoom=18, maxZoom=22).add_to(m)
+    # Planet monthly mosaic (May of same year) — alt source for cross-validation
+    try:
+        if 2017 <= int(year) <= 2025:
+            mosaic = f"global_monthly_{int(year)}_05_mosaic"
+            folium.TileLayer(
+                f"https://tiles.planet.com/basemaps/v1/planet-tiles/{mosaic}/gmap/{{z}}/{{x}}/{{y}}.png?api_key={PLANET_API_KEY}",
+                attr=f"Planet {year}-05 (5m)",
+                name=f"Planet {year}-05",
+                overlay=True, show=False,
+                maxNativeZoom=18, maxZoom=22).add_to(m)
+    except Exception:
+        pass
     if poly_str:
         try:
             poly = json.loads(poly_str)
@@ -429,6 +459,7 @@ def render_mini_html(year, lat, lon, zoom, marker_lat, marker_lon,
                                            "color":"#FFD700","weight":3}
             ).add_to(m)
         except: pass
+    folium.LayerControl(collapsed=True, position="topright").add_to(m)
     return m._repr_html_()
 
 
