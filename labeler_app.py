@@ -121,17 +121,48 @@ supa = get_supabase()
 @st.cache_data(ttl=20)   # 20s cache so multiple labellers see updates
 def fetch_recent_samples(limit=2000):
     """Get most recent label-records (for showing previously-labelled
-    polygons on map)."""
+    polygons on map). Paginates Supabase REST (max 1000 per request)."""
     try:
-        res = (supa.table("prps_interactive_labels")
-                  .select("id,lat,lon,polygon,year,label,labeller,datetime")
-                  .order("datetime", desc=True)
-                  .limit(limit)
-                  .execute())
-        return res.data or []
+        out = []
+        page = 0
+        while len(out) < limit:
+            start = page * 1000
+            end = min(start + 999, limit - 1)
+            res = (supa.table("prps_interactive_labels")
+                      .select("id,lat,lon,polygon,year,label,labeller,datetime")
+                      .order("datetime", desc=True)
+                      .range(start, end)
+                      .execute())
+            chunk = res.data or []
+            out.extend(chunk)
+            if len(chunk) < 1000:
+                break
+            page += 1
+        return out
     except Exception as e:
         st.warning(f"Supabase fetch error: {e}")
         return []
+
+
+@st.cache_data(ttl=20)
+def fetch_total_stats():
+    """Fast total count + yes count + unique locations (server-side)."""
+    try:
+        # Total exact count via HEAD
+        res_total = (supa.table("prps_interactive_labels")
+                          .select("id", count="exact", head=True)
+                          .execute())
+        total = res_total.count or 0
+        # Yes count
+        res_yes = (supa.table("prps_interactive_labels")
+                          .select("id", count="exact", head=True)
+                          .eq("label", "yes")
+                          .execute())
+        n_yes = res_yes.count or 0
+        return {"total": total, "yes": n_yes}
+    except Exception as e:
+        st.warning(f"Supabase count error: {e}")
+        return {"total": 0, "yes": 0}
 
 
 def insert_labels(records):
@@ -195,17 +226,18 @@ st.caption(
     "records (uno por año) y limpia el cuadrado para el siguiente."
 )
 
-# Live counters
+# Live counters — query exact counts server-side (no row limit)
 samples_recent = fetch_recent_samples(limit=5000)
-n_recent_records = len(samples_recent)
+totals = fetch_total_stats()
+n_total_records = totals["total"]
+n_total_yes = totals["yes"]
 n_recent_locs = len(set((round(s["lat"], 5), round(s["lon"], 5))
-                         for s in samples_recent))
-n_recent_yes = sum(1 for s in samples_recent if s.get("label") == "yes")
+                         for s in samples_recent if s.get("lat") is not None))
 
 cstat1, cstat2, cstat3 = st.columns(3)
-with cstat1: st.metric("Total records (proyecto)", n_recent_records)
-with cstat2: st.metric("Ubicaciones únicas",      n_recent_locs)
-with cstat3: st.metric("Yes-labels",              n_recent_yes)
+with cstat1: st.metric("Total records (proyecto)", n_total_records)
+with cstat2: st.metric("Polígonos únicos",         n_recent_locs)
+with cstat3: st.metric("Yes-labels",               n_total_yes)
 
 # ─────────────────────────────────────────────────────────────────────
 # Map state
@@ -568,8 +600,9 @@ with cact:
                 st.session_state["int_marker_lat"] = None
                 st.session_state["int_marker_lon"] = None
                 st.session_state["int_round"] = ROUND + 1
-                # Invalidate cache so next render shows the new label
+                # Invalidate caches so next render shows the new label
                 fetch_recent_samples.clear()
+                fetch_total_stats.clear()
                 st.rerun()
 
     bb = st.columns(2)
