@@ -165,13 +165,19 @@ def fetch_total_stats():
         return {"total": 0, "yes": 0}
 
 
-def insert_labels(records):
-    """Insert a batch of labels into Supabase."""
+def insert_labels(records, mode="insert"):
+    """Insert or upsert a batch of labels into Supabase.
+
+    mode: 'insert' for new records; 'upsert' to update existing by id."""
     try:
-        res = supa.table("prps_interactive_labels").insert(records).execute()
+        if mode == "upsert":
+            res = (supa.table("prps_interactive_labels")
+                       .upsert(records, on_conflict="id").execute())
+        else:
+            res = supa.table("prps_interactive_labels").insert(records).execute()
         return True
     except Exception as e:
-        st.error(f"Supabase insert error: {e}")
+        st.error(f"Supabase {mode} error: {e}")
         return False
 
 
@@ -270,6 +276,75 @@ if marker_lat is not None and marker_lon is not None:
     sample_polygon_geojson = {"type": "Polygon", "coordinates": [ring]}
     sample_polygon = {"type": "Feature",
                         "geometry": sample_polygon_geojson, "properties": {}}
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Editar etiqueta previa (UPSERT mode)
+# ─────────────────────────────────────────────────────────────────────
+with st.expander("✏️ Editar etiqueta previa por polígono", expanded=False):
+    me = st.session_state.get("labeller_name", "")
+    show_only_mine = st.checkbox("Sólo mis etiquetas", value=True, key="edit_only_mine")
+    # Agrupar samples_recent por (round(lat,5), round(lon,5)) — único por parcela
+    unique_polys = {}
+    for s in samples_recent:
+        if s.get("lat") is None: continue
+        key = (round(s["lat"], 5), round(s["lon"], 5))
+        if show_only_mine and s.get("labeller") != me:
+            continue
+        if key not in unique_polys:
+            unique_polys[key] = {
+                "lat": s["lat"], "lon": s["lon"],
+                "labeller": s.get("labeller", "?"),
+                "date": (s.get("datetime") or "")[:10],
+                "base_id": (s.get("base_id") or s["id"].rsplit("_", 1)[0]),
+                "labels_by_year": {},
+                "ids_by_year": {},
+                "polygons_by_year": {},
+            }
+        info = unique_polys[key]
+        y = s.get("year")
+        if y is not None:
+            info["labels_by_year"][int(y)] = s.get("label", "no")
+            info["ids_by_year"][int(y)] = s["id"]
+            if "polygon" in s:
+                info["polygons_by_year"][int(y)] = s["polygon"]
+    polys_list = sorted(unique_polys.values(), key=lambda p: p.get("date") or "", reverse=True)
+    if not polys_list:
+        st.info("No hay etiquetas previas para mostrar. "
+                  "Desmarca 'Sólo mis etiquetas' para ver de otros labellers.")
+    else:
+        st.caption(f"{len(polys_list)} polígonos disponibles")
+        labels_summary = lambda p: f"{sum(1 for v in p['labels_by_year'].values() if v=='yes')}y/{sum(1 for v in p['labels_by_year'].values() if v=='no')}n"
+        options = [
+            f"{i+1}. {p['date']:>10}  {p['labeller']:>10}  "
+            f"lat={p['lat']:.5f} lon={p['lon']:.5f}  ({labels_summary(p)})"
+            for i, p in enumerate(polys_list[:200])
+        ]
+        sel_idx = st.selectbox("Selecciona polígono a editar:",
+                                  options=range(len(options)),
+                                  format_func=lambda i: options[i],
+                                  key="edit_select")
+        c1, c2 = st.columns([1, 3])
+        with c1:
+            if st.button("📝 Cargar para editar", type="primary",
+                          width="stretch"):
+                p = polys_list[sel_idx]
+                st.session_state["int_lat"] = float(p["lat"])
+                st.session_state["int_lon"] = float(p["lon"])
+                st.session_state["int_marker_lat"] = float(p["lat"])
+                st.session_state["int_marker_lon"] = float(p["lon"])
+                st.session_state["edit_mode_base_id"] = p["base_id"]
+                st.session_state["edit_mode_ids_by_year"] = p["ids_by_year"]
+                # Pre-fill radios with existing labels
+                for y, lab in p["labels_by_year"].items():
+                    st.session_state[f"int_radio_{y}_r{ROUND}"] = lab
+                st.rerun()
+        with c2:
+            if st.session_state.get("edit_mode_base_id"):
+                st.warning(f"🟡 **MODO EDICIÓN ACTIVO** — base_id: "
+                              f"`{st.session_state['edit_mode_base_id']}`. "
+                              f"Save All hará UPSERT (sobrescribe). "
+                              f"Cancel limpia el modo edición.")
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -578,12 +653,17 @@ with cact:
     st.markdown("**Save all 10 years (1 click → 10 records → auto-clear marker):**")
 
     def save_all():
-            base_id = f"INT_{int(datetime.now().timestamp())}_{uuid.uuid4().hex[:6]}"
+            # Edit mode: reuse base_id + ids → UPSERT (sobrescribe).
+            edit_base_id = st.session_state.get("edit_mode_base_id")
+            edit_ids_by_year = st.session_state.get("edit_mode_ids_by_year") or {}
+            is_edit = bool(edit_base_id)
+            base_id = edit_base_id or f"INT_{int(datetime.now().timestamp())}_{uuid.uuid4().hex[:6]}"
             labeller = st.session_state.get("labeller_name", "anonymous")
             records = []
             for y, lab in radio_choices.items():
+                rec_id = edit_ids_by_year.get(int(y), f"{base_id}_{y}")
                 rec = {
-                    "id": f"{base_id}_{y}",
+                    "id": rec_id,
                     "lat": float(marker_lat),
                     "lon": float(marker_lon),
                     "polygon": sample_polygon_geojson,
@@ -594,12 +674,15 @@ with cact:
                     "base_id": base_id,
                 }
                 records.append(rec)
-            ok = insert_labels(records)
+            mode = "upsert" if is_edit else "insert"
+            ok = insert_labels(records, mode=mode)
             if ok:
-                st.toast("✅ Saved!", icon="🎯")
+                st.toast(f"✅ {'Actualizado' if is_edit else 'Guardado'}!", icon="🎯")
                 st.session_state["int_marker_lat"] = None
                 st.session_state["int_marker_lon"] = None
                 st.session_state["int_round"] = ROUND + 1
+                st.session_state.pop("edit_mode_base_id", None)
+                st.session_state.pop("edit_mode_ids_by_year", None)
                 # Invalidate caches so next render shows the new label
                 fetch_recent_samples.clear()
                 fetch_total_stats.clear()
@@ -613,11 +696,13 @@ with cact:
                       help="Coloca un marker primero" if no_marker else None):
             save_all()
     with bb[1]:
-        if st.button("↩️ Cancel (clear marker)", width="stretch",
+        if st.button("↩️ Cancel (clear marker + edit mode)", width="stretch",
                       disabled=no_marker):
             st.session_state["int_marker_lat"] = None
             st.session_state["int_marker_lon"] = None
             st.session_state["int_round"] = ROUND + 1
+            st.session_state.pop("edit_mode_base_id", None)
+            st.session_state.pop("edit_mode_ids_by_year", None)
             st.rerun()
 
 
