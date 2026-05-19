@@ -475,6 +475,23 @@ folium.TileLayer(
     maxNativeZoom=14, maxZoom=22, opacity=0.65,
 ).add_to(big_map)
 
+# Overlay con nombres de poblaciones / pueblos / municipios (labels-only)
+folium.TileLayer(
+    "https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png",
+    attr="© CARTO © OSM",
+    name="🏘️ Nombres (poblaciones)",
+    overlay=True, show=False,
+    maxNativeZoom=20, maxZoom=22, opacity=0.9,
+).add_to(big_map)
+# Overlay con límites + capitales (ESRI Reference)
+folium.TileLayer(
+    "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+    attr="© Esri",
+    name="🗺️ Límites + capitales (ESRI)",
+    overlay=True, show=False,
+    maxNativeZoom=18, maxZoom=22, opacity=0.85,
+).add_to(big_map)
+
 if sample_polygon:
     folium.GeoJson(sample_polygon, style_function=lambda x: {
         "fillOpacity":0.10, "fillColor":"#FFD700",
